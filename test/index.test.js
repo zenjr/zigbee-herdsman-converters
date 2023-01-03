@@ -1,5 +1,6 @@
 const index = require('../index');
 const exposes = require('../lib/exposes');
+const tuya = require('../lib/tuya');
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 const equals = require('fast-deep-equal/es6');
 const fs = require('fs');
@@ -93,6 +94,30 @@ describe('index.js', () => {
 
         const definition = index.findByDevice(device);
         expect(definition.model).toBe("RTCGQ01LM");
+    });
+
+    it('Find by fingerprint with priority', () => {
+        const HG06338 = {
+            type: 'Router',
+            manufacturerName: '_TZ3000_vzopcetz',
+            modelID: 'TS011F',
+            applicationVersion: 69,
+        };
+        const TS011F_plug_3 = {
+            type: 'Router',
+            manufacturerName: '_TZ3000_vzopcetz_random',
+            modelID: 'TS011F',
+            applicationVersion: 69,
+        };
+        const TS011F_plug_1 = {
+            type: 'Router',
+            manufacturerName: '_TZ3000_vzopcetz_random',
+            modelID: 'TS011F',
+            applicationVersion: 1,
+        };
+        expect(index.findByDevice(HG06338).model).toBe('HG06338');
+        expect(index.findByDevice(TS011F_plug_3).model).toBe('TS011F_plug_3');
+        expect(index.findByDevice(TS011F_plug_1).model).toBe('TS011F_plug_1');
     });
 
     it('Find by device should prefer fingerprint match over zigbeeModel', () => {
@@ -266,7 +291,7 @@ describe('index.js', () => {
             }
 
             if (device.meta) {
-                containsOnly(['disableActionGroup', 'multiEndpoint', 'applyRedFix', 'disableDefaultResponse', 'enhancedHue', 'timeout', 'supportsHueAndSaturation', 'battery', 'coverInverted', 'turnsOffAtBrightness1', 'pinCodeCount', 'tuyaThermostatSystemMode', 'tuyaThermostatPreset', 'tuyaThermostatPresetToSystemMode', 'thermostat', 'fanStateOn'], Object.keys(device.meta));
+                containsOnly(['disableActionGroup', 'multiEndpoint', 'multiEndpointSkip', 'multiEndpointEnforce', 'applyRedFix', 'disableDefaultResponse', 'enhancedHue', 'timeout', 'supportsHueAndSaturation', 'battery', 'coverInverted', 'turnsOffAtBrightness1', 'coverStateFromTilt', 'pinCodeCount', 'tuyaThermostatSystemMode', 'tuyaThermostatPreset', 'tuyaDatapoints', 'tuyaThermostatPresetToSystemMode', 'thermostat', 'fanStateOn', 'separateWhite', 'publishDuplicateTransaction'], Object.keys(device.meta));
             }
 
             if (device.zigbeeModel) {
@@ -374,8 +399,12 @@ describe('index.js', () => {
     it('Exposes access matches toZigbee', () => {
         index.definitions.forEach((device) => {
             if (device.exposes) {
+                // tuya.tz.datapoints is generic, keys cannot be used to determine expose access
+                if (device.toZigbee.includes(tuya.tz.datapoints)) return;
+
                 const toCheck = [];
-                for (const expose of device.exposes) {
+                const expss = typeof device.exposes == 'function' ? device.exposes() : device.exposes;
+                for (const expose of expss) {
                     if (expose.hasOwnProperty('access')) {
                         toCheck.push(expose)
                     } else if (expose.features && expose.type !== 'composite') {
@@ -406,7 +435,8 @@ describe('index.js', () => {
     it('Check if all exposes have a color temp range', () => {
         const allowed = fs.readFileSync(path.join(__dirname, 'colortemp_range_missing_allowed.txt'), 'utf8').split('\n');
         for (const definition of index.definitions) {
-            for (const expose of definition.exposes.filter(e => e.type === 'light')) {
+            const exposes = Array.isArray(definition.exposes) ? definition.exposes : definition.exposes();
+            for (const expose of exposes.filter(e => e.type === 'light')) {
                 const colorTemp = expose.features.find(f => f.name === 'color_temp');
                 if (colorTemp && !colorTemp._colorTempRangeProvided && !allowed.includes(definition.model)) {
                     throw new Error(`'${definition.model}' is missing color temp range, see https://github.com/Koenkk/zigbee2mqtt.io/blob/develop/docs/how_tos/how_to_support_new_devices.md#31-retrieving-color-temperature-range-only-required-for-lights-which-support-color-temperature`);
@@ -451,5 +481,106 @@ describe('index.js', () => {
     it('Calculate configure key legacy', () => {
         const definition = index.findByZigbeeModel('MCT-340 SMA');
         expect(index.getConfigureKey(definition)).toBe(1);
+    });
+
+    it('Number exposes with set access should have a range', () => {
+        index.definitions.forEach((device) => {
+            if (device.exposes) {
+                const expss = typeof device.exposes == 'function' ? device.exposes() : device.exposes;
+                for (const expose of expss) {
+                    if (expose.type == 'numeric' && expose.access & exposes.access.SET) {
+                        if (expose.value_min == null || expose.value_max == null) {
+                            throw new Error(`Value min or max unknown for ${expose.property}`);
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    it('Function exposes should have linkquality sensor', () => {
+        index.definitions.forEach((definition) => {
+            if (typeof definition.exposes == 'function') {
+                expect(definition.exposes().find((e) => e.property === 'linkquality')).not.toBeUndefined();
+            }
+        });
+    });
+
+    it('Verify options filter', () => {
+        const ZNCLDJ12LM = index.definitions.find((d) => d.model == 'ZNCLDJ12LM');
+        expect(ZNCLDJ12LM.options.length).toBe(1);
+        const ZNCZ04LM = index.definitions.find((d) => d.model == 'ZNCZ04LM');
+        expect(ZNCZ04LM.options.length).toBe(9);
+    });
+
+    it('Verify imports', () => {
+        const files = fs.readdirSync('devices');
+        for (const file of files) {
+            const content = fs.readFileSync(`devices/${file}`, {encoding: 'utf-8'});
+            expect(content).not.toContain(`require('zigbee-herdsman-converters`);
+        }
+    });
+
+    it('Check TuYa tuya.fz.datapoints calibration/presicion options', () => {
+        const TS0601_soil = index.definitions.find((d) => d.model == 'TS0601_soil');
+        expect(TS0601_soil.options.map((t) => t.name)).toStrictEqual(
+            ['humidity_precision', 'humidity_calibration', 'temperature_precision', 'temperature_calibration']);
+    });
+
+    it('List expose number', () => {
+        // Example payload:
+        // {"temperatures": [19,21,30]}
+        const itemType = exposes.numeric('temperature', exposes.access.STATE_SET);
+        const list = exposes.list('temperatures', exposes.access.STATE_SET, itemType);
+        expect(JSON.parse(JSON.stringify(list))).toStrictEqual({
+            "access": 3, 
+            "item_type": {"access": 3, "name": "temperature", "type": "numeric"}, 
+            "name": "temperatures", 
+            "property": "temperatures", 
+            "type": "list"
+        });
+    });
+
+    it('List expose composite', () => {
+        // Example payload:
+        // {"schedule": [{"day":"monday","hour":13,"minute":37}, {"day":"tuesday","hour":14,"minute":59}]}
+
+        const itemType = exposes.composite('dayTime', exposes.access.STATE_SET)
+            .withFeature(exposes.enum('day', exposes.access.STATE_SET, ['monday', 'tuesday', 'wednesday']))
+            .withFeature(exposes.numeric('hour', exposes.access.STATE_SET))
+            .withFeature(exposes.numeric('minute', exposes.access.STATE_SET))
+
+        const list = exposes.list('schedule', exposes.access.STATE_SET, itemType);
+        expect(JSON.parse(JSON.stringify(list))).toStrictEqual({
+            type: 'list',
+            name: 'schedule',
+            property: 'schedule',
+            access: 3,
+            item_type: {
+                type: 'composite',
+                name: 'dayTime',
+                features: [
+                    {
+                        access: 3, 
+                        name: "day", 
+                        property: "day", 
+                        type: "enum",
+                        values: ['monday', 'tuesday', 'wednesday'],
+                    },
+                    {
+                        access: 3, 
+                        name: "hour", 
+                        property: "hour", 
+                        type: "numeric",
+                    },
+                    {
+                        access: 3, 
+                        name: "minute", 
+                        property: "minute", 
+                        type: "numeric",
+                    },
+                ]
+            }
+        });
     });
 });

@@ -85,7 +85,7 @@ module.exports = [
         extend: extend.light_onoff_brightness_colortemp(),
     },
     {
-        zigbeeModel: ['ZHA-PIRSensor'],
+        fingerprint: [{modelID: 'ZHA-PIRSensor', manufacturerName: 'Leedarson'}],
         model: '5AA-SS-ZA-H0',
         vendor: 'Leedarson',
         description: 'Motion sensor',
@@ -110,5 +110,21 @@ module.exports = [
         fromZigbee: [fz.battery, fz.ias_occupancy_alarm_1, fz.ignore_occupancy_report],
         toZigbee: [],
         exposes: [e.battery(), e.occupancy()],
+    },
+    {
+        zigbeeModel: ['LDHD2AZW'],
+        model: 'LDHD2AZW',
+        vendor: 'Leedarson',
+        description: 'Magnetic door & window contact sensor',
+        fromZigbee: [fz.ias_contact_alarm_1, fz.temperature, fz.battery],
+        toZigbee: [],
+        meta: {battery: {voltageToPercentage: '3V_2100'}},
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['msTemperatureMeasurement', 'genPowerCfg']);
+            await reporting.temperature(endpoint);
+            await reporting.batteryVoltage(endpoint);
+        },
+        exposes: [e.contact(), e.battery_low(), e.tamper(), e.temperature(), e.battery()],
     },
 ];

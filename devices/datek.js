@@ -41,42 +41,76 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['haElectricalMeasurement', 'seMetering', 'msTemperatureMeasurement']);
-            await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
             await reporting.readMeteringMultiplierDivisor(endpoint);
+            try {
+                await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
+            } catch (error) {
+                /* fails for some: https://github.com/Koenkk/zigbee2mqtt/issues/11867 */
+            }
             const payload = [{
                 attribute: 'rmsVoltagePhB',
-                minimumReportInterval: 10,
+                minimumReportInterval: 60,
                 maximumReportInterval: 3600,
                 reportableChange: 0,
             },
             {
                 attribute: 'rmsVoltagePhC',
-                minimumReportInterval: 10,
+                minimumReportInterval: 60,
                 maximumReportInterval: 3600,
                 reportableChange: 0,
             },
             {
                 attribute: 'rmsCurrentPhB',
-                minimumReportInterval: 10,
+                minimumReportInterval: 60,
                 maximumReportInterval: 3600,
                 reportableChange: 0,
             },
             {
                 attribute: 'rmsCurrentPhC',
-                minimumReportInterval: 10,
+                minimumReportInterval: 60,
                 maximumReportInterval: 3600,
                 reportableChange: 0,
             }];
             await endpoint.configureReporting('haElectricalMeasurement', payload);
-            await reporting.rmsVoltage(endpoint, {min: 10, max: 3600, change: 0});
-            await reporting.rmsCurrent(endpoint, {min: 10, max: 3600, change: 0});
-            await reporting.instantaneousDemand(endpoint, {min: 10, max: 3600, change: 0});
-            await reporting.currentSummDelivered(endpoint, {min: 10, max: 3600, change: [1, 1]});
+            await reporting.rmsVoltage(endpoint, {min: 60, max: 3600, change: 0});
+            await reporting.rmsCurrent(endpoint, {min: 60, max: 3600, change: 0});
+            await reporting.instantaneousDemand(endpoint, {min: 60, max: 3600, change: 0});
+            await reporting.currentSummDelivered(endpoint, {min: 60, max: 3600, change: [1, 1]});
             await reporting.currentSummReceived(endpoint);
-            await reporting.temperature(endpoint);
+            await reporting.temperature(endpoint, {min: 60, max: 3600, change: 0});
+            device.powerSource = 'DC source';
+            device.save();
         },
         exposes: [e.power(), e.energy(), e.current(), e.voltage(), e.current_phase_b(), e.voltage_phase_b(), e.current_phase_c(),
             e.voltage_phase_c(), e.temperature()],
+    },
+    {
+        fingerprint: [{modelID: 'Motion Sensor', manufacturerName: 'Eva'}],
+        model: 'HSE2927E',
+        vendor: 'Datek',
+        description: 'Eva motion sensor',
+        fromZigbee: [fz.battery, fz.occupancy, fz.occupancy_timeout, fz.illuminance, fz.temperature,
+            fz.ias_enroll, fz.ias_occupancy_alarm_1, fz.ias_occupancy_alarm_1_report, fz.led_on_motion],
+        toZigbee: [tz.occupancy_timeout, tz.led_on_motion],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const options = {manufacturerCode: 4919};
+            const endpoint = device.getEndpoint(1);
+            const binds = ['msIlluminanceMeasurement', 'msTemperatureMeasurement', 'msOccupancySensing', 'ssIasZone'];
+            await reporting.bind(endpoint, coordinatorEndpoint, binds);
+            await reporting.occupancy(endpoint);
+            await reporting.temperature(endpoint);
+            await reporting.illuminance(endpoint);
+            const payload = [{
+                attribute: {ID: 0x4000, type: 0x10},
+            }];
+            await endpoint.configureReporting('ssIasZone', payload, options);
+            await endpoint.read('ssIasZone', ['iasCieAddr', 'zoneState', 'zoneId']);
+            await endpoint.read('msOccupancySensing', ['pirOToUDelay']);
+            await endpoint.read('ssIasZone', [0x4000], options);
+        },
+        exposes: [e.temperature(), e.occupancy(), e.battery_low(), e.illuminance_lux(), e.illuminance(),
+            exposes.binary('led_on_motion', ea.ALL, true, false).withDescription('Enable/disable LED on motion'),
+            exposes.numeric('occupancy_timeout', ea.ALL).withUnit('seconds').withValueMin(0).withValueMax(65535)],
     },
     {
         zigbeeModel: ['ID Lock 150'],
@@ -142,6 +176,7 @@ module.exports = [
             }
         },
         exposes: [e.lock(), e.battery(), e.pincode(),
+            e.lock_action(), e.lock_action_source_name(), e.lock_action_user(),
             exposes.enum('sound_volume', ea.ALL, constants.lockSoundVolume).withDescription('Sound volume of the lock'),
             exposes.binary('master_pin_mode', ea.ALL, true, false).withDescription('Allow Master PIN Unlock'),
             exposes.binary('rfid_enable', ea.ALL, true, false).withDescription('Allow RFID to Unlock'),
@@ -191,5 +226,20 @@ module.exports = [
         exposes: [e.battery(), e.temperature(),
             e.action(['recall_1', 'recall_2', 'recall_3', 'recall_4', 'on', 'off',
                 'brightness_move_down', 'brightness_move_up', 'brightness_stop'])],
+    },
+    {
+        zigbeeModel: ['Door/Window Sensor'],
+        model: 'HSE2920E',
+        vendor: 'Datek',
+        description: 'Door/window sensor',
+        fromZigbee: [fz.ias_contact_alarm_1, fz.ias_contact_alarm_1_report, fz.temperature, fz.ias_enroll],
+        toZigbee: [],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['ssIasZone', 'msTemperatureMeasurement']);
+            await reporting.temperature(endpoint);
+            await endpoint.read('ssIasZone', ['iasCieAddr', 'zoneState', 'zoneId']);
+        },
+        exposes: [e.contact(), e.battery_low(), e.tamper(), e.temperature()],
     },
 ];

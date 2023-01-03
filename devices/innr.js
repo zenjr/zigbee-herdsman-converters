@@ -1,12 +1,43 @@
 const exposes = require('../lib/exposes');
-const fz = {...require('../converters/fromZigbee'), legacy: require('../lib/legacy').fromZigbee};
+const fz = require('../converters/fromZigbee');
 const tz = require('../converters/toZigbee');
 const reporting = require('../lib/reporting');
 const extend = require('../lib/extend');
 const e = exposes.presets;
 const ea = exposes.access;
+const ota = require('../lib/ota');
 
 module.exports = [
+    {
+        zigbeeModel: ['RC 210'],
+        model: 'RC 210',
+        vendor: 'Innr',
+        description: 'Remote control',
+        fromZigbee: [fz.command_on, fz.command_off, fz.command_move, fz.command_stop, fz.command_move_to_level,
+            fz.command_move_to_color_temp],
+        toZigbee: [],
+        exposes: [e.action(['on', 'off', 'brightness_move_up', 'brightness_move_down', 'brightness_stop', 'brightness_move_to_level',
+            'color_temperature_move'])],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const ep = device.getEndpoint(1);
+            await reporting.bind(ep, coordinatorEndpoint, ['genBasic', 'genOnOff', 'genLevelCtrl', 'lightingColorCtrl']);
+        },
+    },
+    {
+        zigbeeModel: ['RC 250'],
+        model: 'RC 250',
+        vendor: 'Innr',
+        description: 'Remote control',
+        fromZigbee: [fz.command_step, fz.command_on, fz.command_off, fz.command_move_to_level, fz.command_move_to_color_temp],
+        toZigbee: [],
+        exposes: [e.action(['on', 'off', 'brightness_step_up', 'brightness_step_down',
+            'brightness_move_to_level', 'color_temperature_move'])],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const ep = device.getEndpoint(1);
+            await reporting.bind(ep, coordinatorEndpoint, ['genBasic', 'genGroups', 'genScenes',
+                'genOnOff', 'genLevelCtrl', 'lightingColorCtrl']);
+        },
+    },
     {
         zigbeeModel: ['RCL 240 T'],
         model: 'RCL 240 T',
@@ -48,11 +79,20 @@ module.exports = [
         meta: {turnsOffAtBrightness1: true},
     },
     {
+        zigbeeModel: ['OGL 130 C'],
+        model: 'OGL 130 C',
+        vendor: 'Innr',
+        description: 'Outdoor smart globe lights',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [100, 1000], supportsHS: true}),
+        meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
         zigbeeModel: ['OPL 130 C'],
         model: 'OPL 130 C',
         vendor: 'Innr',
         description: 'Outdoor smart pedestal light colour',
-        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 555], supportsHS: true}),
+        extend: extend.light_onoff_brightness_colortemp_color(
+            {colorTempRange: [153, 555], supportsHS: true, disableColorTempStartup: true}),
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
@@ -80,8 +120,32 @@ module.exports = [
         meta: {enhancedHue: false, applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
+        zigbeeModel: ['RB 251 C'],
+        model: 'RB 251 C',
+        vendor: 'Innr',
+        description: 'E14 bulb RGBW',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 555], supportsHS: true}),
+        meta: {enhancedHue: false, applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
         zigbeeModel: ['RB 265'],
         model: 'RB 265',
+        vendor: 'Innr',
+        description: 'E27 bulb',
+        extend: extend.light_onoff_brightness(),
+        meta: {turnsOffAtBrightness1: true},
+    },
+    {
+        zigbeeModel: ['BY 266'],
+        model: 'BY 266',
+        vendor: 'Innr',
+        description: 'B22 (Bayonet) bulb, dimmable',
+        extend: extend.light_onoff_brightness(),
+        meta: {turnsOffAtBrightness1: true},
+    },
+    {
+        zigbeeModel: ['RB 266'],
+        model: 'RB 266',
         vendor: 'Innr',
         description: 'E27 bulb',
         extend: extend.light_onoff_brightness(),
@@ -112,6 +176,14 @@ module.exports = [
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
+        zigbeeModel: ['RB 279 T'],
+        model: 'RB 279 T',
+        vendor: 'Innr',
+        description: 'Smart bulb tunable white E27',
+        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [153, 555]}),
+        meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
         zigbeeModel: ['RB 285 C'],
         model: 'RB 285 C',
         vendor: 'Innr',
@@ -120,8 +192,24 @@ module.exports = [
         meta: {enhancedHue: false, applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
+        zigbeeModel: ['RB 286 C'],
+        model: 'RB 286 C',
+        vendor: 'Innr',
+        description: 'E27 bulb RGBW',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 555], supportsHS: true}),
+        meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
         zigbeeModel: ['BY 285 C'],
         model: 'BY 285 C',
+        vendor: 'Innr',
+        description: 'B22 bulb RGBW',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 555], supportsHS: true}),
+        meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
+        zigbeeModel: ['BY 286 C'],
+        model: 'BY 286 C',
         vendor: 'Innr',
         description: 'B22 bulb RGBW',
         extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 555], supportsHS: true}),
@@ -208,6 +296,14 @@ module.exports = [
         meta: {turnsOffAtBrightness1: true},
     },
     {
+        zigbeeModel: ['RS 227 T'],
+        model: 'RS 227 T',
+        vendor: 'Innr',
+        description: 'GU10 spot 420 lm, dimmable, white spectrum',
+        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [200, 454]}),
+        meta: {turnsOffAtBrightness1: true},
+    },
+    {
         zigbeeModel: ['RS 128 T'],
         model: 'RS 128 T',
         vendor: 'Innr',
@@ -220,7 +316,7 @@ module.exports = [
         model: 'RS 228 T',
         vendor: 'Innr',
         description: 'GU10 spot 350 lm, dimmable, white spectrum',
-        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [153, 555]}),
+        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [200, 454]}),
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
@@ -263,6 +359,14 @@ module.exports = [
         description: 'E14 candle with white spectrum',
         extend: extend.light_onoff_brightness_colortemp({colorTempRange: [153, 555]}),
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
+        zigbeeModel: ['RB 249 T'],
+        model: 'RB 249 T',
+        vendor: 'Innr',
+        description: 'E14 candle, dimmable with, color temp',
+        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [200, 454]}),
+        meta: {turnsOffAtBrightness1: true},
     },
     {
         zigbeeModel: ['RB 148 T'],
@@ -442,6 +546,18 @@ module.exports = [
         exposes: [e.power(), e.current(), e.voltage().withAccess(ea.STATE), e.switch(), e.energy()],
     },
     {
+        zigbeeModel: ['SP 110'],
+        model: 'SP 110',
+        vendor: 'Innr',
+        description: 'Smart plug',
+        extend: extend.switch(),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
+            await reporting.onOff(endpoint);
+        },
+    },
+    {
         zigbeeModel: ['SP 220'],
         model: 'SP 220',
         vendor: 'Innr',
@@ -471,6 +587,7 @@ module.exports = [
         vendor: 'Innr',
         description: 'Smart plug',
         extend: extend.switch(),
+        ota: ota.zigbeeOTA,
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
@@ -498,7 +615,9 @@ module.exports = [
             await reporting.rmsVoltage(endpoint);
             // Gives UNSUPPORTED_ATTRIBUTE on reporting.readMeteringMultiplierDivisor.
             endpoint.saveClusterAttributeKeyValue('seMetering', {multiplier: 1, divisor: 100});
+            await reporting.currentSummDelivered(endpoint);
         },
+        ota: ota.zigbeeOTA,
         exposes: [e.power(), e.current(), e.voltage().withAccess(ea.STATE), e.switch(), e.energy()],
     },
     {
@@ -515,6 +634,14 @@ module.exports = [
         vendor: 'Innr',
         description: 'Outdoor flex light colour LED strip 4m, 1000lm, RGBW',
         extend: extend.light_onoff_brightness_colortemp_color({supportsHS: true}),
+        meta: {applyRedFix: true, turnsOffAtBrightness1: true},
+    },
+    {
+        zigbeeModel: ['OFL 142 C'],
+        model: 'OFL 142 C',
+        vendor: 'Innr',
+        description: 'Outdoor flex light colour LED strip 4m, 1440lm, RGBW',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [100, 350], supportsHS: true}),
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {

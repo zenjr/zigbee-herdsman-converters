@@ -15,15 +15,21 @@ module.exports = [
             {modelID: 'w7cahqs', manufacturerName: '_TYST11_yw7cahqs'},
             {modelID: 'TS0601', manufacturerName: '_TZE200_c88teujp'},
             {modelID: 'TS0601', manufacturerName: '_TZE200_yw7cahqs'},
+            {modelID: 'aj4jz0i\u0000', manufacturerName: '_TYST11_caj4jz0i'},
             {modelID: 'TS0601', manufacturerName: '_TZE200_azqp6ssj'},
             {modelID: 'TS0601', manufacturerName: '_TZE200_zuhszj9s'},
             {modelID: 'TS0601', manufacturerName: '_TZE200_9gvruqf5'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_zr9c0day'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_0dvm9mva'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_h4cgnbzg'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_exfrnlow'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_9m4kmbfu'},
         ],
         model: 'SEA801-Zigbee/SEA802-Zigbee',
         vendor: 'Saswell',
         description: 'Thermostatic radiator valve',
         whiteLabel: [{vendor: 'HiHome', model: 'WZB-TRVL'}, {vendor: 'Hama', model: '00176592'},
-            {vendor: 'RTX', model: 'ZB-RT1'}],
+            {vendor: 'RTX', model: 'ZB-RT1'}, {vendor: 'SETTI+', model: 'TRV001'}],
         fromZigbee: [fz.saswell_thermostat, fz.ignore_tuya_set_time, fz.ignore_basic_report, fz.legacy.tuya_thermostat_weekly_schedule],
         toZigbee: [tz.saswell_thermostat_current_heating_setpoint, tz.saswell_thermostat_mode, tz.saswell_thermostat_away,
             tz.saswell_thermostat_child_lock, tz.saswell_thermostat_window_detection, tz.saswell_thermostat_frost_detection,
@@ -40,10 +46,12 @@ module.exports = [
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genBasic']);
         },
-        exposes: [e.battery_low(), e.window_detection(), e.child_lock(), exposes.climate()
-            .withSetpoint('current_heating_setpoint', 5, 30, 0.5, ea.STATE_SET).withLocalTemperature(ea.STATE)
-            .withSystemMode(['off', 'heat', 'auto'], ea.STATE_SET)
-            .withLocalTemperatureCalibration(-6, 6, 1, ea.STATE_SET)
-            .withAwayMode()],
+        exposes: [e.battery_low(), e.window_detection(), e.child_lock(), e.away_mode(),
+            exposes.binary('heating', ea.STATE, 'ON', 'OFF').withDescription('Device valve is open or closed (heating or not)'),
+            exposes.climate()
+                .withSetpoint('current_heating_setpoint', 5, 30, 0.5, ea.STATE_SET).withLocalTemperature(ea.STATE)
+                .withSystemMode(['off', 'heat', 'auto'], ea.STATE_SET)
+                // Range is -6 - 6 and step 1: https://github.com/Koenkk/zigbee2mqtt/issues/11777
+                .withLocalTemperatureCalibration(-6, 6, 1, ea.STATE_SET)],
     },
 ];

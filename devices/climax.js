@@ -91,7 +91,7 @@ module.exports = [
         },
         exposes: [e.battery_low(), e.tamper(), e.warning(),
             exposes.numeric('max_duration', ea.ALL).withUnit('s').withValueMin(0).withValueMax(600).withDescription('Duration of Siren'),
-            exposes.binary('alarm', ea.SET, 'ON', 'OFF').withDescription('Manual start of siren')],
+            exposes.binary('alarm', ea.SET, 'START', 'OFF').withDescription('Manual start of siren')],
     },
     {
         zigbeeModel: ['WS15_00.00.00.14TC'],
@@ -120,5 +120,19 @@ module.exports = [
         toZigbee: [],
         exposes: [e.battery_low(), e.tamper(), e.action(['emergency', 'panic', 'disarm', 'arm_all_zones', 'arm_day_zones']),
         ],
+    },
+    {
+        zigbeeModel: ['PRL_00.00.03.04TC'],
+        model: 'PRL-1ZBS-12/24V',
+        vendor: 'Climax',
+        description: 'Zigbee 12-24V relay controller',
+        extend: extend.switch(),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
+            await reporting.onOff(endpoint);
+            device.powerSource = 'Mains (single phase)';
+            device.save();
+        },
     },
 ];

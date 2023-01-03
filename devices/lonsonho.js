@@ -3,6 +3,7 @@ const fz = {...require('../converters/fromZigbee'), legacy: require('../lib/lega
 const tz = require('../converters/toZigbee');
 const reporting = require('../lib/reporting');
 const extend = require('../lib/extend');
+const tuya = require('../lib/tuya');
 const e = exposes.presets;
 const ea = exposes.access;
 
@@ -24,13 +25,38 @@ module.exports = [
         model: '11830304',
         vendor: 'Lonsonho',
         description: 'Curtain switch',
-        fromZigbee: [fz.cover_position_tilt, fz.tuya_backlight_mode, fz.tuya_cover_options],
-        toZigbee: [tz.cover_state, tz.cover_position_tilt, tz.tuya_cover_calibration, tz.tuya_cover_reversal, tz.tuya_backlight_mode],
+        fromZigbee: [fz.cover_position_tilt, tuya.fz.backlight_mode_low_medium_high, fz.tuya_cover_options],
+        toZigbee: [tz.cover_state, tz.cover_position_tilt, tz.tuya_cover_calibration, tz.tuya_cover_reversal,
+            tuya.tz.backlight_indicator_mode],
         meta: {coverInverted: true},
         exposes: [e.cover_position(), exposes.enum('moving', ea.STATE, ['UP', 'STOP', 'DOWN']),
             exposes.binary('calibration', ea.ALL, 'ON', 'OFF'), exposes.binary('motor_reversal', ea.ALL, 'ON', 'OFF'),
             exposes.enum('backlight_mode', ea.ALL, ['LOW', 'MEDIUM', 'HIGH']),
             exposes.numeric('calibration_time', ea.STATE).withUnit('S').withDescription('Calibration time')],
+    },
+    {
+        fingerprint: [{modelID: 'TS130F', manufacturerName: '_TZ3000_j1xl73iw'}, {modelID: 'TS130F', manufacturerName: '_TZ3000_kmsbwdol'}],
+        model: 'TS130F_dual',
+        vendor: 'Lonsonho',
+        description: 'Dual curtain/blind module',
+        fromZigbee: [fz.cover_position_tilt, fz.tuya_cover_options],
+        toZigbee: [tz.cover_state, tz.cover_position_tilt, tz.tuya_cover_calibration, tz.tuya_cover_reversal],
+        meta: {multiEndpoint: true, coverInverted: true},
+        endpoint: (device) => {
+            return {'left': 1, 'right': 2};
+        },
+        exposes: [
+            exposes.enum('moving', ea.STATE, ['UP', 'STOP', 'DOWN']).withEndpoint('left'),
+            exposes.enum('moving', ea.STATE, ['UP', 'STOP', 'DOWN']).withEndpoint('right'),
+            exposes.numeric('calibration_time', ea.STATE).withUnit('S').withDescription('Calibration time')
+                .withEndpoint('left'),
+            exposes.numeric('calibration_time', ea.STATE).withUnit('S').withDescription('Calibration time')
+                .withEndpoint('right'),
+            e.cover_position().withEndpoint('left'), exposes.binary('calibration', ea.ALL, 'ON', 'OFF')
+                .withEndpoint('left'), exposes.binary('motor_reversal', ea.ALL, 'ON', 'OFF').withEndpoint('left'),
+            e.cover_position().withEndpoint('right'), exposes.binary('calibration', ea.ALL, 'ON', 'OFF')
+                .withEndpoint('right'), exposes.binary('motor_reversal', ea.ALL, 'ON', 'OFF').withEndpoint('right'),
+        ],
     },
     {
         fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_8vxj8khv'}, {modelID: 'TS0601', manufacturerName: '_TZE200_7tdtqgwv'}],
@@ -75,7 +101,7 @@ module.exports = [
         },
     },
     {
-        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TZ3000_ktuoyvt5'}],
+        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TZ3000_ktuoyvt5'}, {modelID: 'TS110E', manufacturerName: '_TZ3210_weaqkhab'}],
         model: 'QS-Zigbee-D02-TRIAC-L',
         vendor: 'Lonsonho',
         description: '1 gang smart dimmer switch module without neutral',
@@ -86,15 +112,24 @@ module.exports = [
         model: 'QS-Zigbee-D02-TRIAC-LN',
         vendor: 'Lonsonho',
         description: '1 gang smart dimmer switch module with neutral',
-        extend: extend.light_onoff_brightness(),
+        fromZigbee: extend.light_onoff_brightness({disableMoveStep: true, disableTransition: true})
+            .fromZigbee.concat([fz.tuya_min_brightness]),
+        toZigbee: extend.light_onoff_brightness({disableMoveStep: true, disableTransition: true})
+            .toZigbee.concat([tz.tuya_min_brightness]),
+        exposes: [e.light_brightness().withMinBrightness()],
     },
     {
-        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TYZB01_v8gtiaed'}],
+        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TYZB01_v8gtiaed'}, {modelID: 'TS110E', manufacturerName: '_TZ3210_pagajpog'}],
         model: 'QS-Zigbee-D02-TRIAC-2C-LN',
         vendor: 'Lonsonho',
         description: '2 gang smart dimmer switch module with neutral',
-        extend: extend.light_onoff_brightness({noConfigure: true}),
-        exposes: [e.light_brightness().withEndpoint('l1'), e.light_brightness().withEndpoint('l2')],
+        fromZigbee: extend.light_onoff_brightness().fromZigbee.concat([fz.tuya_min_brightness]),
+        toZigbee: extend.light_onoff_brightness().toZigbee.concat([tz.tuya_min_brightness]),
+        exposes: [e.light_brightness().withMinBrightness().withEndpoint('l1'),
+            e.light_brightness().withMinBrightness().withEndpoint('l2')],
+        endpoint: (device) => {
+            return {'l1': 1, 'l2': 2};
+        },
         meta: {multiEndpoint: true},
         configure: async (device, coordinatorEndpoint, logger) => {
             await extend.light_onoff_brightness().configure(device, coordinatorEndpoint, logger);
@@ -102,12 +137,9 @@ module.exports = [
             await reporting.bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
             // Don't do: await reporting.onOff(endpoint); https://github.com/Koenkk/zigbee2mqtt/issues/6041
         },
-        endpoint: (device) => {
-            return {l1: 1, l2: 2};
-        },
     },
     {
-        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TZ3000_92chsky7'}],
+        fingerprint: [{modelID: 'TS110F', manufacturerName: '_TZ3000_92chsky7'}, {modelID: 'TS110E', manufacturerName: '_TZ3210_4ubylghk'}],
         model: 'QS-Zigbee-D02-TRIAC-2C-L',
         vendor: 'Lonsonho',
         description: '2 gang smart dimmer switch module without neutral',
@@ -142,7 +174,8 @@ module.exports = [
     {
         zigbeeModel: ['ZB-RGBCW'],
         fingerprint: [{modelID: 'ZB-CL01', manufacturerName: 'eWeLight'}, {modelID: 'ZB-CL01', manufacturerName: 'eWeLink'},
-            {modelID: 'ZB-CL02', manufacturerName: 'eWeLight'}],
+            {modelID: 'ZB-CL02', manufacturerName: 'eWeLight'}, {modelID: 'ZB-CL01', manufacturerName: 'eWeLi\u0001\u0000\u0010'},
+            {modelID: 'Z102LG03-1', manufacturerName: 'eWeLink'}],
         model: 'ZB-RGBCW',
         vendor: 'Lonsonho',
         description: 'Zigbee 3.0 LED-bulb, RGBW LED',
@@ -176,5 +209,17 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             await reporting.bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff']);
         },
+    },
+    {
+        fingerprint: [{modelID: 'TS130F', manufacturerName: '_TZ3000_zirycpws'}],
+        model: 'QS-Zigbee-C03',
+        vendor: 'Lonsonho',
+        description: 'Curtain/blind motor controller',
+        fromZigbee: [fz.cover_position_tilt, fz.tuya_cover_options],
+        toZigbee: [tz.cover_state, tz.cover_position_tilt, tz.tuya_cover_calibration, tz.tuya_cover_reversal],
+        meta: {coverInverted: true},
+        exposes: [e.cover_position(), exposes.enum('moving', ea.STATE, ['UP', 'STOP', 'DOWN']),
+            exposes.binary('calibration', ea.ALL, 'ON', 'OFF'), exposes.binary('motor_reversal', ea.ALL, 'ON', 'OFF'),
+            exposes.numeric('calibration_time', ea.STATE).withUnit('S').withDescription('Calibration time')],
     },
 ];
